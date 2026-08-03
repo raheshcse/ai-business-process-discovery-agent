@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-navy-50 text-navy-900 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Visible focus for every interactive element, not just the ones that
+     happen to be buttons. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-white;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-navy-200/70 bg-white shadow-card;
+  }
+
+  .card-padded {
+    @apply card p-5 sm:p-6;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-navy-800;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm
+           text-navy-900 placeholder:text-navy-400
+           focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/30
+           disabled:cursor-not-allowed disabled:bg-navy-50;
+  }
+
+  .input-invalid {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500/30;
+  }
+
+  .table-header {
+    @apply bg-navy-50/80 text-left text-xs font-semibold uppercase tracking-wide text-navy-500;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded bg-navy-100;
+  }
+}
