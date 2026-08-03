@@ -1,0 +1,16 @@
+@'
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+*.db
+.env
+uploads/
+governance_ledger.jsonl
+governance_ledger.jsonl.lock
+*.tsbuildinfo
+.DS_Store
+'@ | Set-Content "$repo\.gitignore" -Encoding utf8

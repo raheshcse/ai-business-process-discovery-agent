@@ -1,7 +1,0 @@
-uploads/
-*.db
-governance_ledger.jsonl
-governance_ledger.jsonl.lock
-.venv/
-__pycache__/
-.pytest_cache/
