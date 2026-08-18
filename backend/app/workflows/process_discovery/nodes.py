@@ -459,13 +459,23 @@ class ProcessDiscoveryNodes:
             )
         try:
             result = self._analysis_service.analyze(instruction, rag_result)
-        except LLMError:
+        except LLMError as exc:
             logger.warning(
                 "%s failed for workflow %s",
                 failure_label,
                 state.get("workflow_id", "unknown"),
                 exc_info=True,
             )
+            # A timeout and an unreachable server need different actions from
+            # the operator, and reporting both as "unavailable" sent debugging
+            # in the wrong direction. Neither branch leaks provider detail.
+            if "timed out" in str(exc).lower():
+                return self._failed_update(
+                    state,
+                    f"{failure_label} failed because the model did not respond "
+                    f"in time. A CPU-bound model needs several minutes per "
+                    f"stage; raise OLLAMA_TIMEOUT_SECONDS.",
+                )
             return self._failed_update(
                 state,
                 f"{failure_label} failed because the analysis provider was unavailable.",

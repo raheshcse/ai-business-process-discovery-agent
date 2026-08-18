@@ -31,6 +31,34 @@ def test_unreadable_document_is_marked_failed_not_indexed(client, project):
     assert document["chunk_count"] == 0
 
 
+def test_scanned_pdf_explains_the_missing_text_layer(client, project):
+    """An image-only PDF is the single most common upload failure.
+
+    The message must name the cause (no text layer / scanned) and the fix
+    (OCR or re-export), not just report that text was absent.
+    """
+    import pymupdf
+
+    document = pymupdf.open()
+    document.new_page(width=595, height=842)  # a blank page: no text layer
+    payload = document.tobytes()
+    document.close()
+
+    response = client.post(
+        f"/api/v1/projects/{project['id']}/documents",
+        files={"file": ("scan.pdf", payload, "application/pdf")},
+    )
+    assert response.status_code == 201
+
+    stored = client.get(f"/api/v1/documents/{response.json()['id']}").json()
+    assert stored["index_status"] == "failed"
+    message = stored["index_error"]
+    assert "no text layer" in message
+    assert "OCR" in message
+    # It must not blame the user's connection or the server.
+    assert "server logs" not in message
+
+
 def test_rejects_unsupported_file_type(client, project):
     response = client.post(
         f"/api/v1/projects/{project['id']}/documents",

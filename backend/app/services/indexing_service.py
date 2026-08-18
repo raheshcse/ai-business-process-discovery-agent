@@ -27,9 +27,48 @@ from app.core.composition import (
 from app.core.config import settings
 from app.document_processing import ExtractionStatus, UnsupportedDocumentTypeError
 from app.models.document import Document, DocumentIndexStatus
+from app.rag.embeddings import EmbeddingProviderUnavailableError
 from app.repositories.document_repository import DocumentRepository
 
 logger = logging.getLogger(__name__)
+
+def _no_text_message(extension: str) -> str:
+    """Explain an empty extraction in terms the uploader can act on.
+
+    "The document contains no readable text" is accurate and useless: it
+    describes the symptom without naming the overwhelmingly common cause,
+    which for a PDF is that the pages are scanned images.
+    """
+    if extension == ".pdf":
+        return (
+            "This PDF has no text layer -- its pages are images, which is what "
+            "a scan or a photographed document produces. This application does "
+            "not perform OCR, so there is nothing to analyse. Re-export the "
+            "file with selectable text, or run it through an OCR tool first."
+        )
+    if extension in {".csv", ".xlsx"}:
+        return (
+            "This spreadsheet has no readable cell content. It may be empty, "
+            "or contain only images, charts or formatting."
+        )
+    return (
+        "This document contains no readable text. It may be empty, or hold "
+        "only images."
+    )
+
+
+def _extraction_failed_message(extension: str) -> str:
+    if extension == ".pdf":
+        return (
+            "This PDF could not be opened. It may be password-protected, "
+            "corrupt, or use an unsupported encryption scheme."
+        )
+    return (
+        f"This {extension.lstrip('.').upper()} file could not be read. It may "
+        "be corrupt, password-protected, or not really a "
+        f"{extension.lstrip('.').upper()} file despite its extension."
+    )
+
 
 # Serialises mutations of the process-wide in-memory vector store. Indexing
 # runs as a background task, so two concurrent uploads would otherwise race
@@ -70,12 +109,9 @@ class IndexingService:
                 get_document_processor().process, path, document.file_extension
             )
             if extraction.extraction_status is ExtractionStatus.FAILED:
-                raise ValueError(
-                    "Text could not be extracted. The file may be scanned, "
-                    "encrypted or corrupt."
-                )
+                raise ValueError(_extraction_failed_message(document.file_extension))
             if not extraction.text.strip():
-                raise ValueError("The document contains no readable text.")
+                raise ValueError(_no_text_message(document.file_extension))
 
             chunks = await asyncio.to_thread(
                 get_chunker().chunk,
@@ -115,6 +151,11 @@ class IndexingService:
         except UnsupportedDocumentTypeError:
             self._fail(document, "This file type cannot be processed.")
         except FileNotFoundError as exc:
+            self._fail(document, str(exc))
+        except EmbeddingProviderUnavailableError as exc:
+            # Not a ValueError, so without this branch it fell through to the
+            # generic handler below and the user saw "check the server logs"
+            # for a cause the provider had already described precisely.
             self._fail(document, str(exc))
         except ValueError as exc:
             self._fail(document, str(exc))

@@ -18,7 +18,11 @@ class Settings(BaseSettings):
     llm_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
-    ollama_timeout_seconds: float = 60.0
+    # A 3B model generating ~2 000 tokens of structured JSON over a 12 000
+    # character context takes minutes on CPU. The previous 60s default meant
+    # every analysis stage timed out before the model had finished its first
+    # answer, and the workflow reported it as "provider unavailable".
+    ollama_timeout_seconds: float = 300.0
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.0
@@ -35,6 +39,14 @@ class Settings(BaseSettings):
     embedding_provider: str = "ollama"
     ollama_embedding_model: str = "nomic-embed-text"
     local_embedding_dimension: int = 128
+    # Texts per embedding request. A document is chunked before embedding, so
+    # a large file can produce hundreds of chunks; sending them in one request
+    # makes the provider run that many forward passes before it responds, which
+    # times out on CPU. Batching keeps each request bounded and predictable.
+    embedding_batch_size: int = 16
+    # Embeddings get their own timeout because they are batched and run on the
+    # CPU far more often than chat completions do.
+    ollama_embedding_timeout_seconds: float = 120.0
     chunk_size: int = 1_000
     chunk_overlap: int = 200
     max_context_characters: int = 12_000

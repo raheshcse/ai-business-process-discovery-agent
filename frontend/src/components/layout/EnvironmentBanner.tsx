@@ -10,7 +10,24 @@ import { useHealth } from '@/hooks/queries'
  */
 export function EnvironmentBanner() {
   const { data: health } = useHealth()
-  if (!health || health.embeddings_are_semantic) return null
+  if (!health) return null
+
+  // A missing or unreachable model stops everything, so it outranks the
+  // embedding-quality warning below.
+  if (health.provider_error) {
+    return (
+      <div className="sticky bottom-0 z-30 border-t border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 sm:px-6 lg:px-8">
+        <p className="font-semibold">
+          {health.provider_reachable
+            ? 'A required model is not installed'
+            : 'The model provider is not reachable'}
+        </p>
+        <p className="mt-0.5 leading-relaxed">{health.provider_error}</p>
+      </div>
+    )
+  }
+
+  if (health.embeddings_are_semantic) return null
 
   return (
     <div className="sticky bottom-0 z-30 border-t border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-6 lg:px-8">

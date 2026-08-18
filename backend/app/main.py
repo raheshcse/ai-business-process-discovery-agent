@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -40,10 +41,17 @@ async def _restore_vector_index() -> None:
         ]
         if not document_ids:
             return
-        logger.info("Restoring vector index for %s document(s)", len(document_ids))
+        logger.info(
+            "Restoring vector index for %s document(s) in the background",
+            len(document_ids),
+        )
         service = IndexingService(session)
         for document_id in document_ids:
             await service.index_document(document_id)
+        logger.info("Vector index restore complete")
+    except asyncio.CancelledError:
+        logger.info("Vector index restore cancelled during shutdown")
+        raise
     except Exception:
         logger.exception("Vector index restore failed; documents may need reindexing")
     finally:
@@ -53,10 +61,22 @@ async def _restore_vector_index() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     ensure_schema()
-    await _restore_vector_index()
+
+    # Deliberately not awaited. Re-embedding every stored document can take
+    # minutes against a CPU-bound model, and uvicorn does not accept
+    # connections until startup returns -- awaiting this made the API look
+    # like it had crashed ("connection refused") while it was in fact busy.
+    # The task reference is held so it is not garbage collected mid-flight.
+    restore_task = asyncio.create_task(_restore_vector_index())
 
     print(f"Starting {settings.app_name}")
     yield
+    if not restore_task.done():
+        restore_task.cancel()
+        try:
+            await restore_task
+        except (asyncio.CancelledError, Exception):  # noqa: B014 - shutdown path
+            pass
     print(f"Stopping {settings.app_name}")
 
 

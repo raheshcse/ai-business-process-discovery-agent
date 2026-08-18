@@ -9,6 +9,11 @@ class HealthResponse(BaseModel):
     blocked at the evidence gate for reasons unrelated to its documents,
     and the interface should say so rather than let it look like a
     document problem.
+
+    `models_available` and `provider_error` were added after a green
+    "ollama - llama3.2" badge was shown while `llama3.2` was not installed
+    at all. Reporting configuration as if it were health is worse than
+    reporting nothing: it actively misdirects.
     """
 
     status: str
@@ -21,3 +26,9 @@ class HealthResponse(BaseModel):
     embedding_provider: str = "unknown"
     embeddings_are_semantic: bool = True
     minimum_evidence_score: float = 0.0
+
+    # Reachability, not configuration.
+    provider_reachable: bool = True
+    llm_model_available: bool = True
+    embedding_model_available: bool = True
+    provider_error: str | None = None

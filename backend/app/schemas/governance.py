@@ -52,6 +52,10 @@ class LedgerAuditCheck(BaseModel):
     name: str
     label: str
     passed: bool
+    #: True when the check passed only because it had nothing to examine.
+    #: A vacuous pass is not evidence that the control works, and the UI
+    #: must not present it as one.
+    vacuous: bool = False
     explanation: str
     violation_count: int
 

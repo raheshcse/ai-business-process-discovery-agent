@@ -21,6 +21,12 @@ export interface HealthResponse {
    *  evidence governance gate unreliable. The UI warns on this. */
   embeddings_are_semantic: boolean
   minimum_evidence_score: number
+  /** Reachability, not configuration. The header badge must reflect
+   *  whether Ollama actually answered and has the configured models. */
+  provider_reachable: boolean
+  llm_model_available: boolean
+  embedding_model_available: boolean
+  provider_error: string | null
 }
 
 /* -------------------------------------------------------------- Projects */
@@ -231,6 +237,9 @@ export interface LedgerAuditCheck {
   name: string
   label: string
   passed: boolean
+  /** True when the check passed only because it had nothing to examine.
+   *  A vacuous pass is not evidence the control works. */
+  vacuous: boolean
   explanation: string
   violation_count: number
 }

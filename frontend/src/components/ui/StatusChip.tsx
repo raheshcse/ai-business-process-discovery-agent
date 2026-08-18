@@ -21,13 +21,18 @@ export function Chip({
   tone = 'neutral',
   children,
   className,
+  title,
 }: {
   tone?: Tone
   children: React.ReactNode
   className?: string
+  /** Native tooltip. Used to carry the full provider error on the header
+   *  badge, where the chip itself only has room for a short label. */
+  title?: string
 }) {
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1',
         'text-xs font-medium ring-1 ring-inset',

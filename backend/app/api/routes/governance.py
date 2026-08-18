@@ -84,6 +84,35 @@ _CHECK_COPY: dict[str, tuple[str, str, str]] = {
     ),
 }
 
+# A check with nothing to examine passes trivially. Saying "every failed
+# verification was followed by a rule update" when there were no failed
+# verifications is technically true and actively misleading -- on a screen
+# whose entire purpose is honest reporting, that is the wrong trade.
+_VACUOUS_COPY: dict[str, str] = {
+    "no_monitoring_gaps": (
+        "No monitoring-gap threshold is configured, so this check was skipped "
+        "rather than assessed."
+    ),
+    "drift_flagged_monitor_has_pre_node": (
+        "No readiness check flagged a concern during this run, so there was "
+        "nothing for this check to examine."
+    ),
+    "pre_node_has_verification": (
+        "No governance gates ran during this run, so there was nothing for "
+        "this check to examine."
+    ),
+    "insufficient_verification_has_specification_update": (
+        "No verification failed during this run, so there was nothing for this "
+        "check to examine. It has not been demonstrated -- this application "
+        "has no rule-update workflow."
+    ),
+    "terminal_has_human_authorised_transition": (
+        "This run did not stop at a terminal state, so there was nothing for "
+        "this check to examine. It has not been demonstrated -- this "
+        "application has no human approval workflow."
+    ),
+}
+
 
 @router.get("/analyses/{run_id}/governance", response_model=GovernanceReport)
 def get_governance_report(run_id: str, db: DbSession) -> GovernanceReport:
@@ -113,17 +142,43 @@ def get_governance_report(run_id: str, db: DbSession) -> GovernanceReport:
 
     audit_checks: list[LedgerAuditCheck] = []
     if report is not None:
+        entry_types = {entry.entry_type for entry in run.ledger_entries}
+        drift_flagged = any(
+            entry.entry_type == "MONITOR" and entry.payload.get("drift_detected")
+            for entry in run.ledger_entries
+        )
+        insufficient = any(
+            entry.entry_type == "VERIFICATION"
+            and entry.payload.get("result") == "INSUFFICIENT"
+            for entry in run.ledger_entries
+        )
+        # Whether each check had anything at all to assess for this run.
+        has_subject = {
+            "no_monitoring_gaps": (
+                settings.governance_max_monitor_gap_seconds is not None
+            ),
+            "drift_flagged_monitor_has_pre_node": drift_flagged,
+            "pre_node_has_verification": "PRE_NODE" in entry_types,
+            "insufficient_verification_has_specification_update": insufficient,
+            "terminal_has_human_authorised_transition": "TERMINAL" in entry_types,
+        }
+
         for name in (*report.checks_passed, *report.checks_failed):
             passed = name in report.checks_passed
             label, passed_copy, failed_copy = _CHECK_COPY.get(
                 name, (name, "Check passed.", "Check failed.")
             )
+            if passed and not has_subject.get(name, True):
+                explanation = _VACUOUS_COPY.get(name, passed_copy)
+            else:
+                explanation = passed_copy if passed else failed_copy
             audit_checks.append(
                 LedgerAuditCheck(
                     name=name,
                     label=label,
                     passed=passed,
-                    explanation=passed_copy if passed else failed_copy,
+                    vacuous=passed and not has_subject.get(name, True),
+                    explanation=explanation,
                     violation_count=len(report.violations.get(name, [])),
                 )
             )

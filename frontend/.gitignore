@@ -1,4 +1,7 @@
-node_modules
-dist
-.env.local
-*.local
+.venv/
+.env
+business_process_discovery.db
+governance_ledger.jsonl
+governance_ledger.jsonl.lock
+uploads/
+node_modules/

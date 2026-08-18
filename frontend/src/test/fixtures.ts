@@ -19,6 +19,10 @@ export const health: HealthResponse = {
   embedding_provider: 'ollama',
   embeddings_are_semantic: true,
   minimum_evidence_score: 0.35,
+  provider_reachable: true,
+  llm_model_available: true,
+  embedding_model_available: true,
+  provider_error: null,
 }
 
 export const project: Project = {
@@ -284,6 +288,7 @@ export const governanceReport: GovernanceReport = {
       name: 'pre_node_has_verification',
       label: 'Gate decisions were verified',
       passed: true,
+      vacuous: false,
       explanation: 'Every governance gate that ran has a matching verification record.',
       violation_count: 0,
     },
@@ -291,6 +296,7 @@ export const governanceReport: GovernanceReport = {
       name: 'terminal_has_human_authorised_transition',
       label: 'Stopped runs were human-authorised',
       passed: false,
+      vacuous: false,
       explanation:
         'This application has no human approval or re-enablement workflow, so a stopped run has no recorded human sign-off.',
       violation_count: 1,

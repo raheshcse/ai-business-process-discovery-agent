@@ -83,47 +83,85 @@ export function GovernancePage() {
 }
 
 function Verdict({ report }: { report: GovernanceReport }) {
-  const allowed = report.governance_status === 'allowed'
-  const needsReview = report.human_review_required
   const denied = report.decisions.filter((d) => d.outcome === 'denied')
+  const checks = report.decisions.length
+
+  /**
+   * The verdict must reflect the run, not just the gates.
+   *
+   * `governance_status` stays `allowed` when a stage fails for a technical
+   * reason — the gates that ran did allow it, the model simply never
+   * answered. Reading only that field made a failed run render as "passed
+   * every governance check", which is the single most misleading thing this
+   * screen could say.
+   */
+  const kind: 'passed' | 'technical' | 'review' | 'blocked' =
+    report.workflow_status === 'failed'
+      ? 'technical'
+      : report.human_review_required
+        ? 'review'
+        : report.workflow_status === 'completed' &&
+            report.governance_status === 'allowed'
+          ? 'passed'
+          : 'blocked'
+
+  const COPY = {
+    passed: {
+      title: 'This analysis passed every governance check',
+      body:
+        `${checks} of ${checks} checks allowed the workflow to continue. Every ` +
+        `stage was permitted to run only after its evidence requirements were ` +
+        `met, and every result was validated before the next stage used it.`,
+    },
+    technical: {
+      title: 'This analysis did not finish — and governance is not why',
+      body:
+        `The workflow stopped because a stage failed technically, not because ` +
+        `a check refused it. ${checks} check${checks === 1 ? '' : 's'} ran and ` +
+        `passed before the failure. Nothing here says the analysis was unsafe; ` +
+        `it says it never completed. The reason is below.`,
+    },
+    review: {
+      title: 'This analysis is waiting on human judgement',
+      body:
+        `A safety check determined that this run needs an authorised person to ` +
+        `review it before going further.`,
+    },
+    blocked: {
+      title: 'This analysis was stopped by a governance check',
+      body:
+        denied.length > 0
+          ? `The workflow stopped at ${humanise(denied[0].construct_name)}. It ` +
+            `produced no final conclusion rather than one it could not support.`
+          : 'The workflow stopped before completing. Details are below.',
+    },
+  }[kind]
+
+  const tone = {
+    passed: { border: 'border-emerald-200', badge: 'bg-emerald-50 text-emerald-600' },
+    technical: { border: 'border-red-300', badge: 'bg-red-50 text-red-600' },
+    review: { border: 'border-amber-300', badge: 'bg-amber-50 text-amber-600' },
+    blocked: { border: 'border-amber-300', badge: 'bg-amber-50 text-amber-600' },
+  }[kind]
 
   return (
-    <Card
-      className={
-        allowed
-          ? 'border-emerald-200'
-          : needsReview
-            ? 'border-amber-300'
-            : 'border-amber-300'
-      }
-    >
+    <Card className={tone.border}>
       <CardBody className="flex flex-wrap items-start gap-4">
         <div
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${
-            allowed ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-          }`}
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${tone.badge}`}
         >
-          {allowed ? <ShieldIcon /> : <AlertIcon />}
+          {kind === 'passed' ? <ShieldIcon /> : <AlertIcon />}
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-navy-900">
-            {allowed
-              ? 'This analysis passed every governance check'
-              : needsReview
-                ? 'This analysis is waiting on human judgement'
-                : 'This analysis was stopped by a governance check'}
-          </h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-navy-600">
-            {allowed
-              ? `All ${report.decisions.length} checks allowed the workflow to continue. Every stage was permitted to run only after its evidence requirements were met, and every result was validated before the next stage used it.`
-              : denied.length > 0
-                ? `The workflow stopped at ${humanise(denied[0].construct_name)}. It produced no final conclusion rather than one it could not support.`
-                : 'The workflow stopped before completing. Details are below.'}
-          </p>
+          <h2 className="text-base font-semibold text-navy-900">{COPY.title}</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-navy-600">{COPY.body}</p>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <Chip tone={allowed ? 'success' : 'warning'}>
-              {humanise(report.governance_status)}
+            <Chip tone={kind === 'passed' ? 'success' : kind === 'technical' ? 'danger' : 'warning'}>
+              Run {humanise(report.workflow_status)}
+            </Chip>
+            <Chip tone={kind === 'passed' ? 'success' : 'neutral'}>
+              Governance {humanise(report.governance_status)}
             </Chip>
             <Chip tone="neutral">Stage: {humanise(report.governance_stage)}</Chip>
             {report.terminal_state_name ? (
@@ -289,24 +327,41 @@ function AuditChecks({ checks }: { checks: LedgerAuditCheck[] }) {
             <li
               key={check.name}
               className={`flex gap-3 rounded-lg border px-4 py-3 ${
-                check.passed
-                  ? 'border-emerald-200 bg-emerald-50/50'
-                  : 'border-amber-200 bg-amber-50/60'
+                check.vacuous
+                  ? 'border-navy-200 bg-navy-50/70'
+                  : check.passed
+                    ? 'border-emerald-200 bg-emerald-50/50'
+                    : 'border-amber-200 bg-amber-50/60'
               }`}
             >
               <span
                 className={`mt-0.5 shrink-0 ${
-                  check.passed ? 'text-emerald-600' : 'text-amber-600'
+                  check.vacuous
+                    ? 'text-navy-400'
+                    : check.passed
+                      ? 'text-emerald-600'
+                      : 'text-amber-600'
                 }`}
               >
-                {check.passed ? (
+                {check.vacuous ? (
+                  <span className="block text-lg leading-5" aria-hidden="true">
+                    –
+                  </span>
+                ) : check.passed ? (
                   <CheckIcon className="h-5 w-5" />
                 ) : (
                   <AlertIcon className="h-5 w-5" />
                 )}
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-navy-900">{check.label}</p>
+                <p className="text-sm font-medium text-navy-900">
+                  {check.label}
+                  {check.vacuous ? (
+                    <span className="ml-2 rounded bg-navy-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-600">
+                      not exercised
+                    </span>
+                  ) : null}
+                </p>
                 <p className="mt-0.5 text-sm leading-relaxed text-navy-600">
                   {check.explanation}
                 </p>
